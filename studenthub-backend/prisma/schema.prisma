@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole{
+  STUDENT
+  ADMIN
+  
+}
+enum EventType {
+  APPLICATION_DEVELOPMENT
+  PROBLEM_SOLVING
+  OTHER
+}
+
+enum Faculty {
+  BCA
+  BIT
+  CSIT
+  ALL
+}
+
+enum EventStatus {
+  PENDING
+  COMING_SOON
+  FINISHED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      UserRole
+
+  college   College?
+
+  student   Student?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index(role)
+}
+
+model College {
+  id              Int      @id @default(autoincrement())
+
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String
+  logo            String?
+  location        String
+  phone           String
+  profile         String?
+
+  collegeCode     String?  @unique
+  website         String?
+  establishedYear Int?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  students        Student[]
+  events          Event[]
+
+  @@index([name])
+  @@index([location])
+}
+
+model Student {
+  id          Int       @id @default(autoincrement())
+  
+  // 1-to-1 relation with User
+  userId      Int       @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Many-to-1 relation with College (Optional: remove `?` if every student MUST belong to a college)
+  collegeId   Int?
+  college     College?  @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+
+  firstName   String
+  lastName    String
+  phone       String?
+  avatar      String?
+  rollNumber  String?   @unique
+  department  String?
+  batchYear   Int?
+  bio       String?
+
+
+  events    Event[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([firstName, lastName])
+  @@index([collegeId])
+}
+
+model Event {
+  id           Int         @id @default(autoincrement())
+  topic        String
+  bio          String
+  startingDate DateTime
+  endingDate   DateTime
+  type         EventType
+  faculty      Faculty
+  status       EventStatus @default(PENDING)
+
+  // Optional: Link events to the college hosting them
+  collegeId    Int?
+  college      College?    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([status])
+  @@index([startingDate])
+}

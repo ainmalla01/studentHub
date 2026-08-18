@@ -1,0 +1,189 @@
+
+model Certificate {
+  id             String   @id @default(cuid())
+
+  studentId      String
+
+  title          String
+  issuer         String
+  issueDate      DateTime?
+
+  credentialId   String?
+  credentialUrl  String?
+
+  certificateUrl String
+
+  status CertificateStatus @default(GENERATED)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student Student @relation(  fields: [studentId],references: [id],onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("certificates")
+}
+
+model Team {
+  id          String     @id @default(cuid())
+
+  name        String
+
+  description String?
+
+  eventId     String
+
+  leaderId    String
+
+  maxMembers  Int
+
+  status      TeamStatus @default(RECRUITING)
+
+  createdAt   DateTime   @default(now())
+
+  updatedAt   DateTime   @updatedAt
+
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  leader       Student      @relation("TeamLeader", fields: [leaderId], references: [id])
+
+  members      TeamMember[]
+
+  @@index([eventId])
+
+  @@map("teams")
+}
+
+model TeamMember {
+
+  id          String @id @default(cuid())
+
+  teamId      String
+
+  studentId   String
+
+  joinedAt    DateTime @default(now())
+
+  role        TeamRole @default(MEMBER)
+
+  team Team @relation(fields:[teamId],references:[id],onDelete:Cascade)
+
+  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
+
+  @@unique([teamId,studentId])
+
+  @@index([studentId])
+
+}
+
+
+model Community {
+
+  id String @id @default(cuid())
+
+  name String
+
+  description String?
+
+  image String?
+
+  category CommunityCategory
+
+  visibility CommunityVisibility
+
+  creatorId String
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  creator Student @relation(
+      fields:[creatorId],
+      references:[id]
+  )
+
+  members CommunityMember[]
+
+}
+
+model Event {
+
+  id String @id @default(cuid())
+
+  title String
+
+  description String?
+
+  location String?
+
+  eventType EventType
+
+  status EventStatus
+
+  registrationDeadline DateTime
+
+  startDate DateTime
+
+  endDate DateTime?
+
+  maxTeams Int?
+
+  createdById String
+
+createdBy User @relation(fields:[createdById],references:[id])
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  teams Team[]
+
+}
+
+model Notification {
+
+  id String @id @default(cuid())
+
+  userId String
+
+  title String
+
+  message String
+
+  type NotificationType
+
+  isRead Boolean @default(false)
+
+  link String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(
+      fields:[userId],
+      references:[id],
+      onDelete:Cascade
+  )
+
+}
+
+model Bookmark {
+
+  id String @id @default(cuid())
+
+  userId String
+
+  itemId String
+
+  type BookmarkType
+
+  createdAt DateTime @default(now())
+
+  user User @relation(
+      fields:[userId],
+      references:[id],
+      onDelete:Cascade
+  )
+
+  @@unique([userId,itemId,type])
+
+}

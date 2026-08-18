@@ -1,0 +1,335 @@
+/*
+# StudentHub AI - Initial Schema
+
+1. New Tables
+- `profiles` - Extended user profiles linked to auth.users
+  - `id` (uuid, primary key, references auth.users)
+  - `full_name` (text)
+  - `role` (text) - 'student' or 'teacher'
+  - `avatar_url` (text)
+  - `bio` (text)
+  - `created_at` (timestamp)
+  - `updated_at` (timestamp)
+
+- `communities` - Learning communities/groups
+  - `id` (uuid, primary key)
+  - `name` (text, not null)
+  - `description` (text)
+  - `category` (text)
+  - `member_count` (integer, default 0)
+  - `image_url` (text)
+  - `created_at` (timestamp)
+
+- `community_members` - Many-to-many users and communities
+  - `id` (uuid, primary key)
+  - `user_id` (uuid, references auth.users)
+  - `community_id` (uuid, references communities)
+  - `joined_at` (timestamp)
+
+- `resources` - Shared learning resources
+  - `id` (uuid, primary key)
+  - `title` (text, not null)
+  - `description` (text)
+  - `type` (text) - 'pdf', 'video', 'article', 'code'
+  - `url` (text)
+  - `file_size` (text)
+  - `download_count` (integer, default 0)
+  - `user_id` (uuid, references auth.users)
+  - `created_at` (timestamp)
+
+- `events` - Upcoming events and workshops
+  - `id` (uuid, primary key)
+  - `title` (text, not null)
+  - `description` (text)
+  - `date` (timestamp)
+  - `location` (text)
+  - `type` (text) - 'online', 'in-person'
+  - `attendee_count` (integer, default 0)
+  - `max_attendees` (integer)
+  - `created_at` (timestamp)
+
+- `event_attendees` - Event registrations
+  - `id` (uuid, primary key)
+  - `user_id` (uuid, references auth.users)
+  - `event_id` (uuid, references events)
+  - `registered_at` (timestamp)
+
+- `messages` - Direct messages between users
+  - `id` (uuid, primary key)
+  - `sender_id` (uuid, references auth.users)
+  - `receiver_id` (uuid, references auth.users)
+  - `content` (text, not null)
+  - `read` (boolean, default false)
+  - `created_at` (timestamp)
+
+- `notifications` - User notifications
+  - `id` (uuid, primary key)
+  - `user_id` (uuid, references auth.users)
+  - `title` (text, not null)
+  - `message` (text)
+  - `type` (text) - 'info', 'success', 'warning'
+  - `read` (boolean, default false)
+  - `created_at` (timestamp)
+
+- `bookmarks` - Bookmarked resources/events
+  - `id` (uuid, primary key)
+  - `user_id` (uuid, references auth.users)
+  - `item_type` (text) - 'resource', 'event', 'community'
+  - `item_id` (uuid)
+  - `created_at` (timestamp)
+
+2. Security
+- Enable RLS on all tables
+- Owner-scoped policies for user data
+- Public read policies for communities, events, resources
+- Authenticated write policies for all tables
+*/
+
+-- Profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name text,
+  role text DEFAULT 'student',
+  avatar_url text,
+  bio text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Communities table
+CREATE TABLE IF NOT EXISTS communities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  category text,
+  member_count integer DEFAULT 0,
+  image_url text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Community members
+CREATE TABLE IF NOT EXISTS community_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  community_id uuid REFERENCES communities(id) ON DELETE CASCADE,
+  joined_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, community_id)
+);
+
+-- Resources table
+CREATE TABLE IF NOT EXISTS resources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  type text DEFAULT 'article',
+  url text,
+  file_size text,
+  download_count integer DEFAULT 0,
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Events table
+CREATE TABLE IF NOT EXISTS events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  date timestamptz,
+  location text,
+  type text DEFAULT 'online',
+  attendee_count integer DEFAULT 0,
+  max_attendees integer,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Event attendees
+CREATE TABLE IF NOT EXISTS event_attendees (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  event_id uuid REFERENCES events(id) ON DELETE CASCADE,
+  registered_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, event_id)
+);
+
+-- Messages table
+CREATE TABLE IF NOT EXISTS messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  receiver_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  message text,
+  type text DEFAULT 'info',
+  read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Bookmarks table
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  item_type text NOT NULL,
+  item_id uuid NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, item_type, item_id)
+);
+
+-- Enable RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE communities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_attendees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
+
+-- Profiles policies
+DROP POLICY IF EXISTS "select_own_profile" ON profiles;
+CREATE POLICY "select_own_profile" ON profiles FOR SELECT
+  TO authenticated USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "insert_own_profile" ON profiles;
+CREATE POLICY "insert_own_profile" ON profiles FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "update_own_profile" ON profiles;
+CREATE POLICY "update_own_profile" ON profiles FOR UPDATE
+  TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "delete_own_profile" ON profiles;
+CREATE POLICY "delete_own_profile" ON profiles FOR DELETE
+  TO authenticated USING (auth.uid() = id);
+
+-- Communities policies (public read, authenticated write)
+DROP POLICY IF EXISTS "select_communities" ON communities;
+CREATE POLICY "select_communities" ON communities FOR SELECT
+  TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "insert_communities" ON communities;
+CREATE POLICY "insert_communities" ON communities FOR INSERT
+  TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "update_communities" ON communities;
+CREATE POLICY "update_communities" ON communities FOR UPDATE
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "delete_communities" ON communities;
+CREATE POLICY "delete_communities" ON communities FOR DELETE
+  TO authenticated USING (true);
+
+-- Community members policies
+DROP POLICY IF EXISTS "select_community_members" ON community_members;
+CREATE POLICY "select_community_members" ON community_members FOR SELECT
+  TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "insert_community_members" ON community_members;
+CREATE POLICY "insert_community_members" ON community_members FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "delete_community_members" ON community_members;
+CREATE POLICY "delete_community_members" ON community_members FOR DELETE
+  TO authenticated USING (auth.uid() = user_id);
+
+-- Resources policies
+DROP POLICY IF EXISTS "select_resources" ON resources;
+CREATE POLICY "select_resources" ON resources FOR SELECT
+  TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "insert_resources" ON resources;
+CREATE POLICY "insert_resources" ON resources FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "update_resources" ON resources;
+CREATE POLICY "update_resources" ON resources FOR UPDATE
+  TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "delete_resources" ON resources;
+CREATE POLICY "delete_resources" ON resources FOR DELETE
+  TO authenticated USING (auth.uid() = user_id);
+
+-- Events policies
+DROP POLICY IF EXISTS "select_events" ON events;
+CREATE POLICY "select_events" ON events FOR SELECT
+  TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "insert_events" ON events;
+CREATE POLICY "insert_events" ON events FOR INSERT
+  TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "update_events" ON events;
+CREATE POLICY "update_events" ON events FOR UPDATE
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "delete_events" ON events;
+CREATE POLICY "delete_events" ON events FOR DELETE
+  TO authenticated USING (true);
+
+-- Event attendees policies
+DROP POLICY IF EXISTS "select_own_event_attendees" ON event_attendees;
+CREATE POLICY "select_own_event_attendees" ON event_attendees FOR SELECT
+  TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "insert_own_event_attendees" ON event_attendees;
+CREATE POLICY "insert_own_event_attendees" ON event_attendees FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "delete_own_event_attendees" ON event_attendees;
+CREATE POLICY "delete_own_event_attendees" ON event_attendees FOR DELETE
+  TO authenticated USING (auth.uid() = user_id);
+
+-- Messages policies
+DROP POLICY IF EXISTS "select_own_messages" ON messages;
+CREATE POLICY "select_own_messages" ON messages FOR SELECT
+  TO authenticated USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+
+DROP POLICY IF EXISTS "insert_own_messages" ON messages;
+CREATE POLICY "insert_own_messages" ON messages FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = sender_id);
+
+DROP POLICY IF EXISTS "update_own_messages" ON messages;
+CREATE POLICY "update_own_messages" ON messages FOR UPDATE
+  TO authenticated USING (auth.uid() = sender_id) WITH CHECK (auth.uid() = sender_id);
+
+DROP POLICY IF EXISTS "delete_own_messages" ON messages;
+CREATE POLICY "delete_own_messages" ON messages FOR DELETE
+  TO authenticated USING (auth.uid() = sender_id);
+
+-- Notifications policies
+DROP POLICY IF EXISTS "select_own_notifications" ON notifications;
+CREATE POLICY "select_own_notifications" ON notifications FOR SELECT
+  TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "insert_own_notifications" ON notifications;
+CREATE POLICY "insert_own_notifications" ON notifications FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "update_own_notifications" ON notifications;
+CREATE POLICY "update_own_notifications" ON notifications FOR UPDATE
+  TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "delete_own_notifications" ON notifications;
+CREATE POLICY "delete_own_notifications" ON notifications FOR DELETE
+  TO authenticated USING (auth.uid() = user_id);
+
+-- Bookmarks policies
+DROP POLICY IF EXISTS "select_own_bookmarks" ON bookmarks;
+CREATE POLICY "select_own_bookmarks" ON bookmarks FOR SELECT
+  TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "insert_own_bookmarks" ON bookmarks;
+CREATE POLICY "insert_own_bookmarks" ON bookmarks FOR INSERT
+  TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "delete_own_bookmarks" ON bookmarks;
+CREATE POLICY "delete_own_bookmarks" ON bookmarks FOR DELETE
+  TO authenticated USING (auth.uid() = user_id);
