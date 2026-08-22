@@ -33,6 +33,36 @@ enum EventStatus {
   COMING_SOON
   FINISHED
 }
+enum Level{
+  BASIC 
+  INTERMIDIATE 
+  ADVANCE
+}
+enum Type{
+  GOOD
+  EXICLENT
+}
+enum CommunityType {
+  STUDY
+  DEVELOPMENT
+  PROJECT
+  DISCUSSION
+  COMPETITIVE_PROGRAMMING
+  CAREER
+  INTEREST
+  OTHER
+}
+
+enum JoinType{
+  APROVED
+  AUTO
+}
+
+enum requestStatus{
+  APPROVED
+  REJECT
+  REQEST
+}
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -95,14 +125,26 @@ model Student {
   batchYear   Int?
   bio       String?
 
-
   events    Event[]
+  community Community[]
+  skill   Skill[] 
+  badge   Badge[] 
+
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([firstName, lastName])
   @@index([collegeId])
+}
+
+model Skill{
+  id Int @id @default(autoincrement())
+  name String
+  level Level
+  studentId Int?
+  student Student? @relation(fields :[studentId],references:[id],onDelete:Cascade)
+  @@index([studentId])
 }
 
 model Event {
@@ -112,10 +154,12 @@ model Event {
   startingDate DateTime
   endingDate   DateTime
   type         EventType
-  faculty      Faculty
+  faculty      Faculty @default(ALL)
   status       EventStatus @default(PENDING)
 
   // Optional: Link events to the college hosting them
+  studentId    Int?
+  student      Student? @relation(fields:[studentId],references:[id],onDelete:Cascade)
   collegeId    Int?
   college      College?    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
@@ -124,4 +168,50 @@ model Event {
 
   @@index([status])
   @@index([startingDate])
+}
+
+model Badge{
+  id Int @id @default(autoincrement)
+  type Type
+  studentId Int
+  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
+  @@index([studentId])
+}
+model Participate{
+  id Int @id @default(autoincrement)
+  
+  studentId Int?
+  student Student @relation(fields:[studentId], references:[id],onDelete:Cascade)
+  eventsId Int?
+  event Event @relation(fields:[eventsId], refernces:[id],onDelete:Cascade)
+  @@index([studentId])
+  @@index([eventsId])
+}
+
+model Community{
+  id Int @id @default(autoincrement)
+  title String
+  studentId Int
+  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
+  about String?
+  type CommunityType
+  joinedBy JoinType
+  status    requestStatus
+
+@@index([studentId])
+
+}
+
+model communityMember{
+  id Int @id @default(autoincrement)
+
+  communityId Int
+  community Community @relation(fields:[communityId],references:[id],onDelete:cascade)
+  studentId Int
+  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
+
+  status  requestStatus
+
+  @@index([communityId])
+  @@index([studentId])
 }
