@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "types": ["node"]
+  },
+  "include": ["data/src/**/*.ts", "prisma/**/*.ts", "data/src/routes/submission.routes.js", "data/src/routes/student.routes.js", "data/src/routes/skill.routes.js", "data/src/routes/report.routes.js", "data/src/routes/challenge.routes.js", "data/src/routes/auth.routes.js", "data/src/middleware/notFound.middleware.js", "data/src/middleware/error.middleware.js", "data/src/middleware/auth.middleware.js", "data/src/controllers/submission.controller.js", "data/src/controllers/student.controller.js", "data/src/controllers/skill.controller.js", "data/src/controllers/report.controller.js", "data/src/controllers/challenge.controller.js", "data/src/controllers/auth.controller.js", "data/src/validators/submission.validator.js", "data/src/validators/student.validator.js", "data/src/validators/skill.validator.js", "data/src/validators/common.js", "data/src/validators/challenge.validator.js", "data/src/validators/auth.validator.js", "data/src/services/submission.service.js", "data/src/services/student.service.js", "data/src/services/skill.service.js", "data/src/services/report.service.js", "data/src/services/challenge.service.js", "data/src/services/auth.service.js", "data/src/utils/response.js", "data/src/utils/jwt.js", "data/src/utils/AppError.js", "data/src/utils/asyncHandler.js"]
+}

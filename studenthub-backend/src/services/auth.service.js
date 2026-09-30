@@ -1,260 +1,461 @@
-// services/auth.service.js
+import bcrypt from "bcrypt";
 
-import { prisma,UserRole} from "../config/prisma.js";
+import { prisma } from "../config/prisma.js";
+
+import { AppError } from "../utils/AppError.js";
+import {generateTemporaryPassword} from '../utils/generateTemporaryPassword.js'
+import {forgotPasswordReset} from '../utils/send.mail.js'
+
 import {
-  generateRefreshToken,
-  generateToken,
-  verifyRefreshToken,
-  createAuthPayload,
+  signToken
 } from "../utils/jwt.js";
-import {
-  passwordHash,
-  comparePassword,
-} from "../utils/password.js";
-import { existingUser } from "./UserValidate.service.js";
-import AppError from "../utils/AppError.js";
 
 
-/*
-|--------------------------------------------------------------------------
-| Register Student
-|--------------------------------------------------------------------------
-*/
-export const register = async (data,imgUrl,userId) => {
-  // const emailExists = await existingUser(data.email);
-  console.log("register service")
-
-  const hashedPassword = await passwordHash(data.password);
-
-const user = await prisma.user.create({
-  data: {
-    email: data.email,
-    password: hashedPassword,
-    role: "ADMIN" ,// role: "ADMIN" UserRole[role],
-    college: {
-      create: {
-        name:data.name,        // Mapped to 'name' in schema
-        location: data.location,      // Required field in schema
-        phone: data.phone,            // Required field in schema
-        logo:imgUrl, // Optional Cloudinary URL if uploaded
-      },
-    },
-  },
-  include: {
-    college: true, // Returns the nested college data in the response object
-  },
-});
+// ============================================================
+// COLLEGE SIDE
+// AUTHENTICATION
+// ============================================================
 
 
-  return {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    phone:user.phone,
-    logo: user.logo,
-  };
-};
+// ------------------------------------------------------------
+// College Register
+// ------------------------------------------------------------
 
+export const registerCollege = async (input) => {
+  const email = input.email.trim().toLowerCase();
 
-export const studentRegister = async (data,imgUrl,collegeId) => {
-  // const emailExists = await existingUser(data.email);
-  console.log("register service")
-
-  const hashedPassword = await passwordHash(data.password);
-  const batchYear= parseInt(data.batchYear,10)
-
-const user = await prisma.user.create({
-  data: {
-    email: data.email,
-    password: hashedPassword,
-    role: "STUDENT" ,// role: "ADMIN" UserRole[role],
-    student: {
-      create: {
-        firstName:data.firstName,        // Mapped to 'name' in schema
-        lastName:data.lastName,        // Mapped to 'name' in schema
-        phone: data.phone,            // Required field in schema
-        avatar:imgUrl,// Optional Cloudinary URL if upload
-        department:data.department,
-        batchYear:batchYear,
-        collegeId:collegeId
-      },
-    },
-  },
-  include: {
-    student: true, // Returns the nested college data in the response object
-  },
-});
-if(user){
-  console.log("successfully register")
-}
-
-  return {
-    id: user.id,
-    email: user.email,
-    firstName:user.firstName,
-    lastName:user.lastName,
-    batchYear:user.batchYear,
-    phone:user.phone,
-    profile: user.avatar,
-  };
-};
-
-
-
-
-
-/*
-|--------------------------------------------------------------------------
-| Login (Student & College Admin)
-|--------------------------------------------------------------------------
-*/export const login = async (data) => {
-  const { email, password } = data;
-
-  if (!email || !password) {
-    throw new AppError("Email and password are required", 400);
-  }
-
-  const user = await prisma.user.findUnique({
+  const existingUser = await prisma.user.findUnique({
     where: { email },
-    include: {
-      college: true,
-    },
+    select: { id: true },
   });
 
-  if (!user) {
-    throw new AppError("Invalid email or password", 401);
+  if (existingUser) {
+    throw new AppError(
+      409,
+      "An account with this email already exists."
+    );
   }
 
-  if (user.role !== "ADMIN" && user.role !== "COLLEGE") {
-    throw new AppError("Access denied. College portal only.", 403);
-  }
+  const passwordHash = await bcrypt.hash(
+    input.password,
+    12
+  );
 
-  const isMatch = await comparePassword(password, user.password);
+  const college = await prisma.college.create({
+    data: {
+      name: input.name.trim(),
+      location: input.location?.trim() || null,
+      logo: input.logo?.trim() || null,
+      phone: input.phone?.trim() || null,
 
-  if (!isMatch) {
-    throw new AppError("Invalid email or password", 401);
-  }
-
-  const collegeId = user.college?.id ?? null;
-
-  const tokenPayload = {
-    id: user.id,
-    role: user.role,
-    collegeId,
-  };
-
-  const token = generateToken(tokenPayload);
-  const refreshToken = generateRefreshToken(tokenPayload);
-
-  // Return strictly the requested fields
-  return {
-    user: {
-      email: user.email,
-      collegeName: user.college?.name || "",
-      phone: user.college?.phone || "",
-      logo: user.college?.logo || "",
-    },
-    token,
-    refreshToken,
-  };
-};
-
-/*
-|--------------------------------------------------------------------------
-| Refresh Token
-|--------------------------------------------------------------------------
-*/
-export const refreshToken = async (refreshTokenValue) => {
-  if (!refreshTokenValue) {
-    throw new AppError("Refresh token is required", 401);
-  }
-
-  const decoded = verifyRefreshToken(refreshTokenValue);
-
-  if (!decoded) {
-    throw new AppError("Invalid or expired refresh token", 401);
-  }
-
-  // Verify user still exists in DB
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.id },
-    include: {
-      student: true,
-      college: true,
-    },
-  });
-
-  if (!user) {
-    throw new AppError("User not found", 404);
-  }
-
-  // Determine current collegeId directly from database
-  const collegeId =
-    user.role === "ADMIN"
-      ? user.college?.id ?? null
-      : user.student?.collegeId ?? null;
-
-  const payload = {
-    id: user.id,
-    role: user.role,
-    collegeId,
-  };
-
-  const accessToken = generateToken(payload);
-  const newRefreshToken = generateRefreshToken(payload);
-
-  return {
-    accessToken,
-    refreshToken: newRefreshToken,
-  };
-};
-
-/*
-|--------------------------------------------------------------------------
-| Get Current Logged-In User
-|--------------------------------------------------------------------------
-*/
-export const getMe = async (id) => {
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: {
-      student: {
-        include: {
-          skills: true,
-          college: true,
+      user: {
+        create: {
+          email,
+          passwordHash,
+          role: "COLLEGE",
         },
       },
-      college: true,
+    },
+
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+        },
+      },
     },
   });
 
-  if (!user) {
-    throw new AppError("User not found", 404);
-  }
+  const token = signToken({
+    sub: college.user.id,
+    collegeId: college.id,
+    role: college.user.role,
+  });
 
   return {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    student: user.student,
-    college: user.college,
-    collegeId:
-      user.role === "ADMIN"
-        ? user.college?.id ?? null
-        : user.student?.collegeId ?? null,
+    token,
+
+    user: {
+      id: college.id,
+      role: college.user.role,
+      name: college.name,
+      email: college.user.email,
+      location: college.location,
+      logo: college.logo,
+      phone: college.phone,
+    },
   };
 };
 
 
-export const userType_exists = async ({ role }) => {
-   console.log("got here service site")
-  // Use UserRole[role] or check directly against the UserRole object
+// ------------------------------------------------------------
+// College Login
+// ------------------------------------------------------------
 
-  const user = await prisma.user.findFirst({
+export const loginCollege = async (
+  email,
+  password
+) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user = await prisma.user.findUnique({
     where: {
-      role: UserRole[role] || role, // Matches UserRole.COLLEGE dynamically
+      email: normalizedEmail,
+    },
+
+    include: {
+      college: true,
     },
   });
 
-  return Boolean(user);
+  if (
+    !user ||
+    user.role !== "COLLEGE" ||
+    !user.college
+  ) {
+    throw new AppError(
+      401,
+      "Invalid email or password."
+    );
+  }
+
+  const passwordMatches = await bcrypt.compare(
+    password,
+    user.passwordHash
+  );
+
+  if (!passwordMatches) {
+    throw new AppError(
+      401,
+      "Invalid email or password."
+    );
+  }
+
+  const college = user.college;
+
+  const token = signToken({
+    sub: user.id,
+    collegeId: college.id,
+    role: user.role,
+  });
+
+  return {
+    token,
+
+    user: {
+      id: college.id,
+      role: user.role,
+      name: college.name,
+      email: user.email,
+      location: college.location,
+      logo: college.logo,
+      phone: college.phone,
+    },
+  };
+};
+
+
+// ============================================================
+// STUDENT SIDE
+// AUTHENTICATION
+// ============================================================
+
+
+// ------------------------------------------------------------
+// Student Login
+// ------------------------------------------------------------
+export const loginStudent = async (email, password) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+    include: {
+      student: true,
+    },
+  });
+
+
+  if (
+    !user ||
+    user.role !== "STUDENT" ||
+    !user.student
+  ) {
+    throw new AppError(
+      401,
+      "Invalid email or password."
+    );
+  }
+
+  if (user.student.status !== "ACTIVE") {
+    throw new AppError(
+      403,
+      "This student account is inactive."
+    );
+  }
+
+  const passwordMatches =
+    await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
+
+ 
+
+  if (!passwordMatches) {
+    throw new AppError(
+      401,
+      "Invalid email or password."
+    );
+  }
+
+  const token = signToken({
+    sub: user.id,
+    studentId: user.student.id,
+    role: user.role,
+  });
+
+  return {
+    token,
+    user: {
+      id: user.student.id,
+      role: user.role,
+      studentId: user.student.studentId,
+      name: user.student.name,
+      email: user.email,
+      department: user.student.department,
+      batch: user.student.batch,
+      status: user.student.status,
+      mustChangePassword:
+        user.student.mustChangePassword,
+    },
+  };
+};
+
+// ============================================================
+// STUDENT SIDE
+// PASSWORD MANAGEMENT
+// ============================================================
+
+
+// ------------------------------------------------------------
+// Reset Student Password
+// ------------------------------------------------------------
+
+export const resetPassword = async (
+  userId,
+  pwd
+) => {
+
+  // Support both pwd.newPassword
+  // and pwd.password just in case
+
+  const newPassword =
+    pwd?.newPassword || pwd?.password;
+
+  if (!newPassword) {
+    throw new AppError(
+      400,
+      "New password is required."
+    );
+  }
+
+  const hashedPassword =
+    await bcrypt.hash(
+      newPassword,
+      12
+    );
+
+  await prisma.user.update({
+    where: {
+      id: userId,
+    },
+
+    // Ensure this is the User table ID
+
+    data: {
+      passwordHash: hashedPassword,
+
+      student: {
+        update: {
+          mustChangePassword: false,
+        },
+      },
+    },
+  });
+
+  return {
+    message: "Password reset successfully.",
+  };
+};
+
+
+
+
+export const checkUser = async (
+  userId,
+  studentId
+) => {
+  const student =
+    await prisma.student.findFirst({
+      where: {
+        id: studentId,
+        userId: userId,
+      },
+
+      select: {
+        id: true,
+        userId: true,
+        mustChangePassword: true,
+      },
+    });
+
+  return student;
+};
+
+
+export const checkCollegeExists =
+  async () => {
+
+    const college =
+      await prisma.college.findFirst({
+        select: {
+          id: true,
+        },
+      });
+
+    return {
+      hasCollege: college !== null,
+    };
+  };
+
+ export const forgotPassword = async (email) => {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Find user
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
+
+  if (!user) {
+    throw new AppError(404, "Email not found.");
+  }
+
+  // Generate temporary password
+  const password = await generateTemporaryPassword();
+
+  // Send temporary password first
+  try {
+    await forgotPasswordReset(user.email, password);
+  } catch (error) {
+    console.error("Forgot password email error:", error);
+
+    throw new AppError(
+      500,
+      "Unable to send password reset email."
+    );
+  }
+
+  // Hash the same temporary password
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  // Update password only after email was sent successfully
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      passwordHash,
+    },
+  });
+
+  return {
+    message: "A temporary password has been sent to your email.",
+  };
+};
+
+
+export const changePassword = async (
+  userId,
+  oldPassword,
+  newPassword
+) => {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+      passwordHash: true,
+      role: true,
+    },
+  });
+
+  if (!user) {
+    throw new AppError(
+      404,
+      "User account not found."
+    );
+  }
+
+  // Verify current password
+  const passwordMatches = await bcrypt.compare(
+    oldPassword,
+    user.passwordHash
+  );
+
+  if (!passwordMatches) {
+    throw new AppError(
+      401,
+      "Current password is incorrect."
+    );
+  }
+
+  // Prevent using the same password
+  const samePassword = await bcrypt.compare(
+    newPassword,
+    user.passwordHash
+  );
+
+  if (samePassword) {
+    throw new AppError(
+      400,
+      "New password must be different from the current password."
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(
+    newPassword,
+    12
+  );
+
+  await prisma.user.update({
+    where: {
+      id: userId,
+    },
+    data: {
+      passwordHash,
+
+      // If this is a student, normal password
+      // change completes any pending first-login requirement.
+      ...(user.role === "STUDENT"
+        ? {
+            student: {
+              update: {
+                mustChangePassword: false,
+              },
+            },
+          }
+        : {}),
+    },
+  });
+
+  return {
+    message: "Password changed successfully.",
+  };
 };

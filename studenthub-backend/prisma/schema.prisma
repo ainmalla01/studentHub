@@ -6,212 +6,330 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-// ============================================================
+
+// ==========================================
 // ENUMS
-// ============================================================
+// ==========================================
 
-enum UserRole{
+enum UserRole {
+  COLLEGE
   STUDENT
-  ADMIN
-  
-}
-enum EventType {
-  APPLICATION_DEVELOPMENT
-  PROBLEM_SOLVING
-  OTHER
 }
 
-enum Faculty {
-  BCA
-  BIT
-  CSIT
-  ALL
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
 }
 
-enum EventStatus {
-  PENDING
-  COMING_SOON
-  FINISHED
-}
-enum Level{
-  BASIC 
-  INTERMIDIATE 
-  ADVANCE
-}
-enum Type{
-  GOOD
-  EXICLENT
-}
-enum CommunityType {
-  STUDY
-  DEVELOPMENT
-  PROJECT
-  DISCUSSION
-  COMPETITIVE_PROGRAMMING
-  CAREER
-  INTEREST
-  OTHER
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
 }
 
-enum JoinType{
-  APROVED
-  AUTO
+enum ChallengeStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
 }
 
-enum requestStatus{
-  APPROVED
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  EVALUATED
   REJECT
-  REQEST
 }
+
+enum SubmissionType {
+  GITHUB_LINK
+  FILE_UPLOAD
+  BOTH
+}
+
+enum SkillCategory {
+  PROGRAMMING
+  FRONTEND
+  BACKEND
+  DATABASE
+  DEVOPS
+  TOOLS
+}
+
+enum SkillLevel {
+  BASIC
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum Department {
+  ALL
+  BCA
+  CSIT
+  BIT
+}
+
+// ==========================================
+// MODELS
+// ==========================================
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  role      UserRole
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                UserRole
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  college   College?
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
 
-  student   Student?
+  // One-to-one relations depending on the role
+  college             College?
+  student             Student?
+  
+  // Opposite relation for notifications
+  notifications       Notification[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@index(role)
+  @@map("users")
 }
 
 model College {
-  id              Int      @id @default(autoincrement())
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  name      String
+  location  String?
+  logo      String?
+  phone     String?
+  about     String?
+  stamp     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  userId          Int      @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenges Challenge[]
 
-  name            String
-  logo            String?
-  location        String
-  phone           String
-  profile         String?
-
-  collegeCode     String?  @unique
-  website         String?
-  establishedYear Int?
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  students        Student[]
-  events          Event[]
-
-  @@index([name])
-  @@index([location])
+  @@map("colleges")
 }
 
 model Student {
-  id          Int       @id @default(autoincrement())
-  
-  // 1-to-1 relation with User
-  userId      Int       @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String        @id @default(uuid()) @db.Uuid
+  userId             String        @unique @map("user_id") @db.Uuid
+  studentId          String?       @unique @map("student_id")
+  profile            String
+  name               String
+  batch              Int
+  department         String
+  status             StudentStatus @default(ACTIVE)
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  mustChangePassword Boolean       @default(true) @map("must_change_password")
+  isVerified         Boolean       @default(false) @map("is_verified")
 
-  // Many-to-1 relation with College (Optional: remove `?` if every student MUST belong to a college)
-  collegeId   Int?
-  college     College?  @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  phone              String?
+  location           String?
+  headline           String?
+  about              String?       @db.Text
+  university         String?
 
-  firstName   String
-  lastName    String
-  phone       String?
-  avatar      String?
-  rollNumber  String?   @unique
-  department  String?
-  batchYear   Int?
-  bio       String?
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissions     Submission[]
+  skills          StudentSkill[]
+  participations  ChallengeParticipate[]
 
-  events    Event[]
-  community Community[]
-  skill   Skill[] 
-  badge   Badge[] 
-
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([firstName, lastName])
-  @@index([collegeId])
-}
-
-model Skill{
-  id Int @id @default(autoincrement())
-  name String
-  level Level
-  studentId Int?
-  student Student? @relation(fields :[studentId],references:[id],onDelete:Cascade)
-  @@index([studentId])
-}
-
-model Event {
-  id           Int         @id @default(autoincrement())
-  topic        String
-  bio          String
-  startingDate DateTime
-  endingDate   DateTime
-  type         EventType
-  faculty      Faculty @default(ALL)
-  status       EventStatus @default(PENDING)
-
-  // Optional: Link events to the college hosting them
-  studentId    Int?
-  student      Student? @relation(fields:[studentId],references:[id],onDelete:Cascade)
-  collegeId    Int?
-  college      College?    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
+  @@index([department])
+  @@index([batch])
   @@index([status])
-  @@index([startingDate])
+  @@map("students")
 }
 
-model Badge{
-  id Int @id @default(autoincrement)
-  type Type
-  studentId Int
-  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
-  @@index([studentId])
-}
-model Participate{
-  id Int @id @default(autoincrement)
+model Challenge {
+  id             String          @id @default(uuid()) @db.Uuid
+  collegeId      String?         @map("college_id") @db.Uuid
+  title          String
+  description    String
+  instructions   String
+  difficulty     Difficulty
   
-  studentId Int?
-  student Student @relation(fields:[studentId], references:[id],onDelete:Cascade)
-  eventsId Int?
-  event Event @relation(fields:[eventsId], refernces:[id],onDelete:Cascade)
-  @@index([studentId])
-  @@index([eventsId])
+  startDate      DateTime        @map("start_date")
+  deadline       DateTime
+  
+  submissionType SubmissionType  @map("submission_type")
+  status         ChallengeStatus @default(DRAFT)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  college        College?               @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  submissions    Submission[]
+  skills         ChallengeSkill[]
+  participations ChallengeParticipate[] 
+  departments    Department[]           @map("departments")
+  notifications  Notification[]
+  rubrics Rubric[]
+
+  @@index([collegeId])
+  @@index([status])
+  @@index([startDate])
+  @@index([deadline])
+  @@map("challenges")
 }
 
-model Community{
-  id Int @id @default(autoincrement)
-  title String
-  studentId Int
-  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
-  about String?
-  type CommunityType
-  joinedBy JoinType
-  status    requestStatus
+model Skill {
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String        @unique
+  category  SkillCategory
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
-@@index([studentId])
+  challenges ChallengeSkill[]
+  students   StudentSkill[]
 
+  @@index([category])
+  @@map("skills")
 }
 
-model communityMember{
-  id Int @id @default(autoincrement)
+model ChallengeSkill {
+  id          String @id @default(uuid()) @db.Uuid
+  challengeId String @map("challenge_id") @db.Uuid
+  skillId     String @map("skill_id") @db.Uuid
 
-  communityId Int
-  community Community @relation(fields:[communityId],references:[id],onDelete:cascade)
-  studentId Int
-  student Student @relation(fields:[studentId],references:[id],onDelete:Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  skill     Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  status  requestStatus
+  @@unique([challengeId, skillId])
+  @@index([skillId])
+  @@map("challenge_skills")
+}
 
-  @@index([communityId])
+model Submission {
+  id          String           @id @default(uuid()) @db.Uuid
+  studentId   String           @map("student_id") @db.Uuid
+  challengeId String           @map("challenge_id") @db.Uuid
+  githubLink  String?          @map("github_link")
+  description String?
+  status      SubmissionStatus @default(SUBMITTED)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  challenge     Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  evaluation    Evaluation?
+  notifications Notification[]
+
+  @@unique([studentId, challengeId])
   @@index([studentId])
+  @@index([challengeId])
+  @@index([status])
+  @@map("student_submissions")
+}
+
+model Evaluation {
+  id           String   @id @default(uuid()) @db.Uuid
+  submissionId String   @unique @map("submission_id") @db.Uuid
+  total        Int
+  feedback     String?
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  submission Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  scores     RubricScore[]
+
+  @@map("evaluations")
+}
+
+model StudentSkill {
+  id        String     @id @default(uuid()) @db.Uuid
+  studentId String     @map("student_id") @db.Uuid
+  skillId   String     @map("skill_id") @db.Uuid
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, skillId])
+  @@index([skillId])
+  @@map("student_skills")
+}
+
+model ChallengeParticipate {
+  id          String   @id @default(uuid()) @db.Uuid
+  studentId   String   @map("student_id") @db.Uuid
+  challengeId String   @map("challenge_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, challengeId])
+  @@index([studentId])
+  @@index([challengeId])
+  @@map("challenge_participations")
+}
+
+// Define the different events that trigger notifications
+enum NotificationType {
+  NEW_CHALLENGE           // When an instructor posts a new challenge
+  CHALLENGE_DEADLINE      // Upcoming deadline reminder
+  SUBMISSION_RECEIVED     // When a student submits work (for instructors)
+  SUBMISSION_EVALUATED    // When a submission is graded/reviewed
+  SUBMISSION_REJECTED     // When a submission fails automated checks
+  SYSTEM_ALERT            // General platform announcements
+}
+
+model Notification {
+  id           String           @id @default(uuid()) @db.Uuid
+  
+  // The user receiving the notification
+  userId       String           @map("user_id") @db.Uuid
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type         NotificationType
+  title        String
+  message      String
+  numNotifaction int?         @default(0) @map("num_notification")
+  
+  
+  // Optional relations - populate based on the NotificationType
+  challengeId  String?          @map("challenge_id") @db.Uuid
+  challenge    Challenge?       @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  
+  submissionId String?          @map("submission_id") @db.Uuid
+  submission   Submission?      @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  
+  
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, isRead])     // Optimizes querying a user's unread notifications
+  @@map("notifications")
+}
+
+model Rubric {
+  id          String   @id @default(uuid()) @db.Uuid
+  challengeId String   @map("challenge_id") @db.Uuid
+  name        String
+  description String?
+  maxScore    Int      @map("max_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  challenge Challenge     @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  scores    RubricScore[]
+
+  @@index([challengeId])
+  @@map("rubrics")
+}
+
+model RubricScore {
+  id           String @id @default(uuid()) @db.Uuid
+  evaluationId String @map("evaluation_id") @db.Uuid
+  rubricId     String @map("rubric_id") @db.Uuid
+  score        Int
+  feedback     String?
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  rubric     Rubric     @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluationId, rubricId])
+  @@index([rubricId])
+  @@map("rubric_scores")
 }

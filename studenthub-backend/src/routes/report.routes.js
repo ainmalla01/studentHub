@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import * as c from '../controllers/report.controller.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+const router = Router();
+router.use(requireAuth, requireRole('COLLEGE'));
+router.get('/dashboard', asyncHandler(c.dashboard));
+router.get('/students/:studentId/performance', asyncHandler(c.studentPerformance));
+router.get('/skills', asyncHandler(c.skills));
+router.get('/submissions', asyncHandler(c.submissions));
+export default router;
