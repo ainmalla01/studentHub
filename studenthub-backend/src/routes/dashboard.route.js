@@ -18,5 +18,6 @@ router.get(
   requireRole("COLLEGE"),
   asyncHandler(controller.getCollegeDashboard),
 );
+router.get( "/stats", requireAuth, controller.getStudentDashboardStatsController );
 
 export default router;

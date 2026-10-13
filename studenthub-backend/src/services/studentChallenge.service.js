@@ -21,75 +21,168 @@ import { calculateChallengeStatus } from "../utils/calculateChallengeStatus.js";
 // Get Published / Active Challenges
 // Student → Challenges → List
 // ------------------------------------------------------------
+export const getParticipateChallengeList = async (
+  params = {},
+  studentId
+) => {
+  const { page = 1, limit = 20 } = params;
 
+  const skip = (page - 1) * limit;
 
-export const getParticipateChallengeList = async (studentId) => {
+  console.log("Participated challenges service:", {
+    page,
+    limit,
+    studentId,
+  });
+
   const participations =
     await prisma.challengeParticipate.findMany({
       where: {
         studentId,
       },
 
-      orderBy: {
-        createdAt: "desc",
-      },
+      select: {
+        id: true,
+        createdAt: true,
 
-      include: {
         challenge: {
-          include: {
-            skills: {
-              include: {
-                skill: true,
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            difficulty: true,
+            startDate: true,
+            deadline: true,
+            status: true,
+
+            // Total number of students
+            // participating in this challenge
+            participations: {
+              select: {
+                id: true,
               },
             },
 
+            // Only this student's latest submission
             submissions: {
               where: {
                 studentId,
               },
+
               select: {
                 id: true,
-                challengeId: true,
                 status: true,
                 createdAt: true,
-                updatedAt: true,
-                githubLink: true,
-                description: true,
-              },
-            },
 
-            _count: {
-              select: {
-                participations: true,
-                submissions: true,
+                evaluation: {
+                  select: {
+                    total: true,
+                    feedback: true,
+                    verified: true,
+                  },
+                },
               },
+
+              orderBy: {
+                createdAt: "desc",
+              },
+
+              take: 1,
             },
           },
         },
       },
+
+      orderBy: {
+        createdAt: "desc",
+      },
+
+      skip,
+      take: limit,
     });
 
-  return participations.map((participation) => {
-    const challenge = participation.challenge;
+  const total =
+    await prisma.challengeParticipate.count({
+      where: {
+        studentId,
+      },
+    });
 
-    return {
-      ...challenge,
+  const now = new Date();
 
-      participated: true,
+  const result = participations.map(
+    (participation) => {
+      const challenge = participation.challenge;
 
-      totalParticipation:
-        challenge._count.participations,
+      let displayStatus = "UPCOMING";
 
-      totalSubmissions:
-        challenge._count.submissions,
+      if (challenge.status === "CLOSED") {
+        displayStatus = "CLOSED";
+      } else if (
+        challenge.status === "PUBLISHED"
+      ) {
+        if (
+          now < new Date(challenge.startDate)
+        ) {
+          displayStatus = "UPCOMING";
+        } else if (
+          now > new Date(challenge.deadline)
+        ) {
+          displayStatus = "CLOSED";
+        } else {
+          displayStatus = "PUBLISHED";
+        }
+      }
 
-      studentSubmission:
-        challenge.submissions[0] ?? null,
+      const submission =
+        challenge.submissions.length > 0
+          ? challenge.submissions[0]
+          : null;
 
-      _count: undefined,
-      submissions: undefined,
-    };
-  });
+      return {
+        id: challenge.id,
+        title: challenge.title,
+        description: challenge.description,
+        difficulty: challenge.difficulty,
+        startDate: challenge.startDate,
+        deadline: challenge.deadline,
+
+        status: displayStatus,
+
+        totalParticipation:
+          challenge.participations.length,
+
+        participated: true,
+
+        submission: submission
+          ? {
+              id: submission.id,
+              status: submission.status,
+              score:
+                submission.evaluation?.total ??
+                null,
+              feedback:
+                submission.evaluation?.feedback ??
+                null,
+              submittedAt:
+                submission.createdAt,
+            }
+          : null,
+      };
+    }
+  );
+
+  return {
+    result,
+
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages:
+        Math.ceil(total / limit),
+    },
+  };
 };
 
 export const getStudentChallenges = async (
@@ -102,24 +195,9 @@ export const getStudentChallenges = async (
     department,
   } = params;
 
-  // ----------------------------------------------------------
-  // Build Where Condition
-  // ----------------------------------------------------------
-  console.log("students service part")
-
   const where = {
-    // Do NOT filter by status here.
-    // We want all challenges and will remove CLOSED
-    // after calculating their actual status.
+    ...(difficulty ? { difficulty } : {}),
 
-    // Difficulty
-    ...(difficulty
-      ? {
-          difficulty,
-        }
-      : {}),
-
-    // Search
     ...(search
       ? {
           OR: [
@@ -139,7 +217,6 @@ export const getStudentChallenges = async (
         }
       : {}),
 
-    // Department
     ...(department && department !== "ALL"
       ? {
           departments: {
@@ -149,16 +226,12 @@ export const getStudentChallenges = async (
       : {}),
   };
 
-  // ----------------------------------------------------------
-  // Get Challenges
-  // ----------------------------------------------------------
-
   const items = await prisma.challenge.findMany({
     where,
-
     include: {
       ...includeChallenge,
 
+      // Check participation for the current student
       participations: {
         where: {
           studentId,
@@ -167,30 +240,57 @@ export const getStudentChallenges = async (
           id: true,
         },
       },
-    },
 
+      // Check submissions for the current student
+      submissions: {
+        where: {
+          studentId,
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
-
     take: 10,
   });
 
-  // ----------------------------------------------------------
-  // Format + Remove CLOSED
-  // ----------------------------------------------------------
-
   const result = items
-    .map(formatStudentChallenge)
+    .map((item) => {
+      const challenge = formatStudentChallenge(item);
+
+      const submission = item.submissions[0] ?? null;
+
+      return {
+        ...challenge,
+        participated: item.participations.length > 0,
+        hasSubmitted: submission !== null,
+        submission: submission
+          ? {
+              id: submission.id,
+              status: submission.status,
+              submittedAt: submission.createdAt,
+            }
+          : null,
+      };
+    })
     .filter(
       (challenge) => challenge.status !== "CLOSED"
     );
-    console.log("students: challenge students :",result)
 
   return {
     result,
   };
 };
+
 
 // ============================================================
 // SINGLE CHALLENGE

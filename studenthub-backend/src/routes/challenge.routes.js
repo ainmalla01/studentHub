@@ -26,10 +26,10 @@ router.get(
 
 // Student challenge details
 router.get(
-  "/student/Mychallenges",
+  "/student/participated",
   requireAuth,
   requireRole("STUDENT"),
-  asyncHandler(studentC.getParticipateChallengeList)
+  studentC.getParticipateChallengeList
 );
 
 // Participate in challenge

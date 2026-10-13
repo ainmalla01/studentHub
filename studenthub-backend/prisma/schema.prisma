@@ -11,6 +11,14 @@ datasource db {
 // ENUMS
 // ==========================================
 
+enum NotificationType {
+  CHALLENGE_CREATED
+  SUBMISSION_RECEIVED
+  SUBMISSION_EVALUATED
+  SUBMISSION_REJECTED
+  SUBMISSION_APPROVED
+}
+
 enum UserRole {
   COLLEGE
   STUDENT
@@ -73,22 +81,22 @@ enum Department {
 // ==========================================
 
 model User {
-  id                  String    @id @default(uuid()) @db.Uuid
-  email               String    @unique
-  passwordHash        String    @map("password_hash")
-  role                UserRole
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   resetToken          String?   @unique
   resetTokenExpiresAt DateTime?
 
   // One-to-one relations depending on the role
-  college             College?
-  student             Student?
-  
+  college College?
+  student Student?
+
   // Opposite relation for notifications
-  notifications       Notification[]
+  notifications UserNotification[]
 
   @@map("users")
 }
@@ -125,16 +133,16 @@ model Student {
   mustChangePassword Boolean       @default(true) @map("must_change_password")
   isVerified         Boolean       @default(false) @map("is_verified")
 
-  phone              String?
-  location           String?
-  headline           String?
-  about              String?       @db.Text
-  university         String?
+  phone      String?
+  location   String?
+  headline   String?
+  about      String? @db.Text
+  university String?
 
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  submissions     Submission[]
-  skills          StudentSkill[]
-  participations  ChallengeParticipate[]
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissions    Submission[]
+  skills         StudentSkill[]
+  participations ChallengeParticipate[]
 
   @@index([department])
   @@index([batch])
@@ -143,16 +151,16 @@ model Student {
 }
 
 model Challenge {
-  id             String          @id @default(uuid()) @db.Uuid
-  collegeId      String?         @map("college_id") @db.Uuid
-  title          String
-  description    String
-  instructions   String
-  difficulty     Difficulty
-  
-  startDate      DateTime        @map("start_date")
-  deadline       DateTime
-  
+  id           String     @id @default(uuid()) @db.Uuid
+  collegeId    String?    @map("college_id") @db.Uuid
+  title        String
+  description  String
+  instructions String
+  difficulty   Difficulty
+
+  startDate DateTime @map("start_date")
+  deadline  DateTime
+
   submissionType SubmissionType  @map("submission_type")
   status         ChallengeStatus @default(DRAFT)
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -161,10 +169,10 @@ model Challenge {
   college        College?               @relation(fields: [collegeId], references: [id], onDelete: SetNull)
   submissions    Submission[]
   skills         ChallengeSkill[]
-  participations ChallengeParticipate[] 
+  participations ChallengeParticipate[]
   departments    Department[]           @map("departments")
   notifications  Notification[]
-  rubrics Rubric[]
+  rubrics        Rubric[]
 
   @@index([collegeId])
   @@index([status])
@@ -209,7 +217,7 @@ model Submission {
   status      SubmissionStatus @default(SUBMITTED)
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
-  
+
   student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   challenge     Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   evaluation    Evaluation?
@@ -231,17 +239,17 @@ model Evaluation {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  submission Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   scores     RubricScore[]
 
   @@map("evaluations")
 }
 
 model StudentSkill {
-  id        String     @id @default(uuid()) @db.Uuid
-  studentId String     @map("student_id") @db.Uuid
-  skillId   String     @map("skill_id") @db.Uuid
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  skillId   String   @map("skill_id") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -266,43 +274,6 @@ model ChallengeParticipate {
   @@map("challenge_participations")
 }
 
-// Define the different events that trigger notifications
-enum NotificationType {
-  NEW_CHALLENGE           // When an instructor posts a new challenge
-  CHALLENGE_DEADLINE      // Upcoming deadline reminder
-  SUBMISSION_RECEIVED     // When a student submits work (for instructors)
-  SUBMISSION_EVALUATED    // When a submission is graded/reviewed
-  SUBMISSION_REJECTED     // When a submission fails automated checks
-  SYSTEM_ALERT            // General platform announcements
-}
-
-model Notification {
-  id           String           @id @default(uuid()) @db.Uuid
-  
-  // The user receiving the notification
-  userId       String           @map("user_id") @db.Uuid
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  type         NotificationType
-  title        String
-  message      String
-  numNotifaction int?         @default(0) @map("num_notification")
-  
-  
-  // Optional relations - populate based on the NotificationType
-  challengeId  String?          @map("challenge_id") @db.Uuid
-  challenge    Challenge?       @relation(fields: [challengeId], references: [id], onDelete: SetNull)
-  
-  submissionId String?          @map("submission_id") @db.Uuid
-  submission   Submission?      @relation(fields: [submissionId], references: [id], onDelete: SetNull)
-  
-  
-  createdAt    DateTime         @default(now()) @map("created_at")
-
-  @@index([userId, isRead])     // Optimizes querying a user's unread notifications
-  @@map("notifications")
-}
-
 model Rubric {
   id          String   @id @default(uuid()) @db.Uuid
   challengeId String   @map("challenge_id") @db.Uuid
@@ -320,9 +291,9 @@ model Rubric {
 }
 
 model RubricScore {
-  id           String @id @default(uuid()) @db.Uuid
-  evaluationId String @map("evaluation_id") @db.Uuid
-  rubricId     String @map("rubric_id") @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
+  evaluationId String  @map("evaluation_id") @db.Uuid
+  rubricId     String  @map("rubric_id") @db.Uuid
   score        Int
   feedback     String?
 
@@ -332,4 +303,42 @@ model RubricScore {
   @@unique([evaluationId, rubricId])
   @@index([rubricId])
   @@map("rubric_scores")
+}
+
+model Notification {
+  id           String           @id @default(cuid())
+  type         NotificationType
+  title        String
+  message      String
+  challengeId  String?          @map("challenge_id") @db.Uuid
+  submissionId String?          @map("submission_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  challenge  Challenge?  @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  submission Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  recipients UserNotification[]
+
+  @@index([challengeId])
+  @@index([submissionId])
+  @@map("notifications")
+}
+
+model UserNotification {
+  id             String @id @default(cuid())
+  userId         String @map("user_id") @db.Uuid
+  notificationId String @map("notification_id")
+
+  isRead Boolean   @default(false) @map("is_read")
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationId])
+  @@index([userId, isRead])
+  @@index([notificationId])
+  @@map("user_notifications")
 }

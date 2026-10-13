@@ -1,10 +1,7 @@
 import { prisma } from "../config/prisma.js";
-
 import { AppError } from "../utils/AppError.js";
-
 import { checkSubmissionEligibility } from "../utils/submission.helper.js";
 import { calculateEvaluation } from "../utils/evaluation.calculation.js";
-import { createNotification } from "./notification.service.js";
 // ============================================================
 // SHARED
 // SUBMISSION DATA
@@ -218,20 +215,13 @@ export const createSubmission = async (
       include: includeSubmission,
     });
 
+      // Create notification for college
+  await createSubmissionNotification(
+    submission,
+    student.id,
+    challenge.college.userId
+  );
 
-      await createNotification({
-    userId: challenge.college.userId,
-
-    type: "SUBMISSION_RECEIVED",
-
-    title: "New submission received",
-
-    message: `${student.name} submitted work for "${challenge.title}".`,
-
-    challengeId: challenge.id,
-
-    submissionId: submission.id,
-  });
 
 
 
@@ -696,6 +686,29 @@ export const verifySubmission = async (id) => {
       scores: {
         include: {
           rubric: true,
+        },
+      },
+    },
+  });
+};
+
+
+
+export const createSubmissionNotification = async (
+  submission,
+  studentId,
+  collegeUserId
+) => {
+  await prisma.notification.create({
+    data: {
+      type: "SUBMISSION_RECEIVED",
+      title: "New Submission Received",
+      message: "A student has submitted a challenge.",
+      submissionId: submission.id,
+
+      recipients: {
+        create: {
+          userId: collegeUserId,
         },
       },
     },

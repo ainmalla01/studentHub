@@ -6,8 +6,9 @@ import { ok } from "../utils/response.js";
 
 
 import {
-  challengeQuerySchema,
+  challengeQuerySchema
 } from "../validators/challenge.validator.js";
+
 
 // ------------------------------------------------------------
 // Shared
@@ -39,19 +40,33 @@ console.log("controller after the service: ",result)
   );
 };
 
+
+
 // ------------------------------------------------------------
 // Get Student Challenges
 // Student → Challenges
 // ------------------------------------------------------------
+
 export const getParticipateChallengeList = async (req, res) => {
+  const query = challengeQuerySchema.parse(req.query);
+
   const studentId = req.user.studentId;
 
-  const result = await service.getParticipateChallengeList(studentId);
+  const result = await service.getParticipateChallengeList(
+    query,
+    studentId
+  );
 
-  return res.status(200).json({
-    success: true,
+  console.log(
+    "controller participated challenges:",
+    result
+  );
+
+  return ok(
+    res,
     result,
-  });
+    "Participated challenges fetched successfully"
+  );
 };
 // ------------------------------------------------------------
 // Get Student Challenge Details

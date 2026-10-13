@@ -1,3 +1,4 @@
+
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 import { calculateChallengeStatus } from "../utils/calculateChallengeStatus.js";
@@ -42,15 +43,14 @@ export const getChallengeById = async (
 ) => {
   const challenge = await prisma.challenge.findFirst({
     where: {
-      id:id
+      id,
+      ...where,
     },
-
     include: {
       ...includeChallenge,
       ...additionalInclude,
     },
   });
-  
 
   if (!challenge) {
     throw new AppError(404, "Challenge not found.");
@@ -64,42 +64,41 @@ export const getChallengeById = async (
 // ------------------------------------------------------------
 
 export const formatChallenge = (challenge) => {
-  const {
-    _count,
-    ...rest
-  } = challenge;
+  const { _count, ...rest } = challenge;
 
-  const computedStatus =
-    calculateChallengeStatus(challenge);
+  const computedStatus = calculateChallengeStatus(challenge);
 
   return {
     ...rest,
-
     status: computedStatus,
-
-    totalParticipation:
-      _count?.participations || 0,
-
-    totalSubmissions:
-      _count?.submissions || 0,
+    totalParticipation: _count?.participations || 0,
+    totalSubmissions: _count?.submissions || 0,
   };
 };
 
 // ------------------------------------------------------------
-// Format Challenge With Participation
+// Format Challenge With Participation and Submission
 // ------------------------------------------------------------
 
-export const formatStudentChallenge = (
-  challenge
-) => {
-  const formatted =
-    formatChallenge(challenge);
+export const formatStudentChallenge = (challenge) => {
+  const formatted = formatChallenge(challenge);
+
+  const submission = challenge.submissions?.[0] ?? null;
 
   return {
     ...formatted,
 
-    participated:
-      challenge.participations?.length > 0,
+    participated: (challenge.participations?.length ?? 0) > 0,
+
+    hasSubmitted: submission !== null,
+
+    submission: submission
+      ? {
+          id: submission.id,
+          status: submission.status,
+          submittedAt: submission.createdAt,
+        }
+      : null,
   };
 };
 
@@ -111,19 +110,15 @@ export const ensureChallengeExists = async (
   id,
   where = {}
 ) => {
-  const challenge =
-    await prisma.challenge.findFirst({
-      where: {
-        id,
-        ...where,
-      },
-    });
+  const challenge = await prisma.challenge.findFirst({
+    where: {
+      id,
+      ...where,
+    },
+  });
 
   if (!challenge) {
-    throw new AppError(
-      404,
-      "Challenge not found."
-    );
+    throw new AppError(404, "Challenge not found.");
   }
 
   return challenge;

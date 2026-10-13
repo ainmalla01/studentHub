@@ -41,3 +41,100 @@ export const getCollegeDashboard = async () => {
     pendingEvaluations,
   };
 };
+
+
+/**
+ * Get dashboard statistics for the authenticated student.
+ */
+export async function getStudentDashboardStats(studentId) {
+  if (!studentId) {
+    throw new AppError(
+      401,
+      "Student authentication is required."
+    );
+  }
+
+  const student = await prisma.student.findUnique({
+    where: {
+      id: studentId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!student) {
+    throw new AppError(
+      404,
+      "Student not found."
+    );
+  }
+
+  const [
+    challengesCompleted,
+    pendingSubmissions,
+    totalScoreResult,
+    portfolioCount,
+  ] = await Promise.all([
+    // ----------------------------------------------------------
+    // Completed Challenges
+    // ----------------------------------------------------------
+    prisma.submission.count({
+      where: {
+        studentId,
+        status: "EVALUATED",
+      },
+    }),
+
+    // ----------------------------------------------------------
+    // Pending Reviews
+    // SUBMITTED + UNDER_REVIEW
+    // ----------------------------------------------------------
+    prisma.submission.count({
+      where: {
+        studentId,
+        status: {
+          in: [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+          ],
+        },
+      },
+    }),
+
+    // ----------------------------------------------------------
+    // Total Score
+    // Sum of evaluation totals belonging to this student
+    // ----------------------------------------------------------
+    prisma.evaluation.aggregate({
+      where: {
+        submission: {
+          studentId,
+        },
+      },
+      _sum: {
+        total: true,
+      },
+    }),
+
+    // ----------------------------------------------------------
+    // Portfolio Items
+    // Only verified evaluations are included.
+    // ----------------------------------------------------------
+    prisma.evaluation.count({
+      where: {
+        verified: true,
+        submission: {
+          studentId,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    challengesCompleted,
+    pendingSubmissions,
+    totalScore: totalScoreResult._sum.total ?? 0,
+    portfolioCount,
+  };
+}

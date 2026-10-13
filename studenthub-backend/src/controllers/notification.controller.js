@@ -1,4 +1,6 @@
+
 import * as notificationService from "../services/notification.service.js";
+
 import { AppError } from "../utils/AppError.js";
 
 /**
@@ -7,25 +9,15 @@ import { AppError } from "../utils/AppError.js";
  * Get notifications for the currently
  * authenticated user.
  */
-export const getNotifications = async (
-  req,
-  res,
-  next
-) => {
+export const getNotifications = async (req, res, next) => {
   try {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new AppError(
-        401,
-        "Authentication required."
-      );
+      throw new AppError(401, "Authentication required.");
     }
 
-    const result =
-      await notificationService.getNotifications(
-        userId
-      );
+    const result = await notificationService.getNotifications(userId);
 
     return res.status(200).json({
       success: true,
@@ -42,23 +34,20 @@ export const getNotifications = async (
  *
  * Mark one notification as read.
  */
-export const markAsRead = async (
-  req,
-  res,
-  next
-) => {
+export const markAsRead = async (req, res, next) => {
   try {
     const userId = req.user?.id;
-    const notificationId = req.params.id;
+    const { id: notificationId } = req.params;
 
     if (!userId) {
-      throw new AppError(
-        401,
-        "Authentication required."
-      );
+      throw new AppError(401, "Authentication required.");
     }
 
-    await notificationService.markAsRead(
+    if (!notificationId) {
+      throw new AppError(400, "Notification ID is required.");
+    }
+
+    const notification = await notificationService.markAsRead(
       notificationId,
       userId
     );
@@ -66,6 +55,7 @@ export const markAsRead = async (
     return res.status(200).json({
       success: true,
       message: "Notification marked as read.",
+      data: notification,
     });
   } catch (error) {
     next(error);
@@ -75,33 +65,22 @@ export const markAsRead = async (
 /**
  * PATCH /api/notifications/read-all
  *
- * Mark all notifications of the authenticated
- * user as read.
+ * Mark all notifications for the current
+ * authenticated user as read.
  */
-export const markAllAsRead = async (
-  req,
-  res,
-  next
-) => {
+export const markAllAsRead = async (req, res, next) => {
   try {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new AppError(
-        401,
-        "Authentication required."
-      );
+      throw new AppError(401, "Authentication required.");
     }
 
-    const result =
-      await notificationService.markAllAsRead(
-        userId
-      );
+    const result = await notificationService.markAllAsRead(userId);
 
     return res.status(200).json({
       success: true,
-      message:
-        "All notifications marked as read.",
+      message: "All notifications marked as read.",
       data: result,
     });
   } catch (error) {
@@ -112,35 +91,30 @@ export const markAllAsRead = async (
 /**
  * DELETE /api/notifications/:id
  *
- * Delete one notification belonging to
- * the authenticated user.
+ * Delete/remove one notification for the
+ * currently authenticated user.
  */
-export const deleteNotification = async (
-  req,
-  res,
-  next
-) => {
+export const deleteNotification = async (req, res, next) => {
   try {
     const userId = req.user?.id;
-    const notificationId = req.params.id;
+    const { id: notificationId } = req.params;
 
     if (!userId) {
-      throw new AppError(
-        401,
-        "Authentication required."
-      );
+      throw new AppError(401, "Authentication required.");
     }
 
-    const result =
-      await notificationService.deleteNotification(
-        notificationId,
-        userId
-      );
+    if (!notificationId) {
+      throw new AppError(400, "Notification ID is required.");
+    }
+
+    const result = await notificationService.deleteNotification(
+      notificationId,
+      userId
+    );
 
     return res.status(200).json({
       success: true,
-      message:
-        "Notification deleted successfully.",
+      message: "Notification deleted successfully.",
       data: result,
     });
   } catch (error) {

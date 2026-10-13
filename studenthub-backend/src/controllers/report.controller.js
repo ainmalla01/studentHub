@@ -1,62 +1,12 @@
-import { z } from "zod";
 
-import * as service from "../services/report.service.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getSkillsReport } from "../services/report.service.js";
 
-import { ok } from "../utils/response.js";
+export const getSkillsReportController = asyncHandler(async (req, res) => {
+    const collegeId = req.user?.collegeId;
 
+    const report = await getSkillsReport(collegeId);
 
-// ============================================================
-// COLLEGE PORTAL
-// REPORTS CONTROLLER
-// ============================================================
-
-
-// ------------------------------------------------------------
-// Dashboard Report
-// ------------------------------------------------------------
-
-export const dashboard = async (_req, res) =>
-  ok(
-    res,
-    await service.getDashboardReport()
-  );
-
-
-// ------------------------------------------------------------
-// Student Performance Report
-// ------------------------------------------------------------
-
-export const studentPerformance = async (req, res) =>
-  ok(
-    res,
-    await service.getStudentPerformance(
-      z
-        .object({
-          studentId: z.string().uuid(),
-        })
-        .parse(req.params)
-        .studentId
-    )
-  );
-
-
-// ------------------------------------------------------------
-// Skills Report
-// ------------------------------------------------------------
-
-export const skills = async (_req, res) =>
-  ok(
-    res,
-    await service.getSkillReport()
-  );
-
-
-// ------------------------------------------------------------
-// Submissions Report
-// ------------------------------------------------------------
-
-export const submissions = async (_req, res) =>
-  ok(
-    res,
-    await service.getSubmissionReport()
-  );
+    return res.status(200).json(report);
+  }
+);

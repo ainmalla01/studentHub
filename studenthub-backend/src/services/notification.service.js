@@ -2,87 +2,62 @@ import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 
 /**
- * Create a notification for a specific user.
- */
-export const createNotification = async ({
-  userId,
-  type,
-  title,
-  message,
-  challengeId = null,
-  submissionId = null,
-}) => {
-  if (!userId) {
-    throw new AppError(
-      400,
-      "Notification recipient is required."
-    );
-  }
-
-  return await prisma.notification.create({
-    data: {
-      userId,
-      type,
-      title,
-      message,
-      challengeId,
-      submissionId,
-    },
-  });
-};
-
-/**
  * Get notifications for the currently authenticated user.
  */
 export const getNotifications = async (userId) => {
-  const notifications = await prisma.notification.findMany({
-    where: {
-      userId,
-    },
-
-    include: {
-      challenge: {
-        select: {
-          id: true,
-          title: true,
-        },
+  const userNotifications =await prisma.userNotification.findMany({
+      where: {
+        userId,
       },
 
-      submission: {
-        select: {
-          id: true,
-          status: true,
-          challenge: {
-            select: {
-              id: true,
-              title: true,
+      include: {
+        notification: {
+          include: {
+            challenge: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+
+            submission: {
+              select: {
+                id: true,
+                status: true,
+                challenge: {
+                  select: {
+                    id: true,
+                    title: true,
+                  },
+                },
+              },
             },
           },
         },
       },
-    },
 
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-  const totalCount = await prisma.notification.count({
-    where: {
-      userId,
-    },
-  });
+  const totalCount =
+    await prisma.userNotification.count({
+      where: {
+        userId,
+      },
+    });
 
-  const unreadCount = await prisma.notification.count({
-    where: {
-      userId,
-      isRead: false,
-    },
-  });
+  const unreadCount =
+    await prisma.userNotification.count({
+      where: {
+        userId,
+        isRead: false,
+      },
+    });
 
   return {
-    data: notifications,
-
+    data: userNotifications,
     meta: {
       totalCount,
       unreadCount,
@@ -92,40 +67,37 @@ export const getNotifications = async (userId) => {
 
 /**
  * Mark one notification as read.
- *
- * The userId check ensures that a user
- * cannot mark another user's notification.
  */
 export const markAsRead = async (
   notificationId,
   userId
 ) => {
-  const notification =
-    await prisma.notification.findFirst({
+  const userNotification =
+    await prisma.userNotification.findFirst({
       where: {
-        id: notificationId,
+        notificationId,
         userId,
       },
     });
 
-  if (!notification) {
+  if (!userNotification) {
     throw new AppError(
       404,
       "Notification not found."
     );
   }
 
-  if (notification.isRead) {
-    return notification;
+  if (userNotification.isRead) {
+    return userNotification;
   }
 
-  return await prisma.notification.update({
+  return await prisma.userNotification.update({
     where: {
-      id: notificationId,
+      id: userNotification.id,
     },
-
     data: {
       isRead: true,
+      readAt: new Date(),
     },
   });
 };
@@ -136,14 +108,14 @@ export const markAsRead = async (
  */
 export const markAllAsRead = async (userId) => {
   const result =
-    await prisma.notification.updateMany({
+    await prisma.userNotification.updateMany({
       where: {
         userId,
         isRead: false,
       },
-
       data: {
         isRead: true,
+        readAt: new Date(),
       },
     });
 
@@ -153,33 +125,30 @@ export const markAllAsRead = async (userId) => {
 };
 
 /**
- * Delete one notification.
- *
- * The userId check ensures that a user
- * cannot delete another user's notification.
+ * Delete one notification for the current user.
  */
 export const deleteNotification = async (
   notificationId,
   userId
 ) => {
-  const notification =
-    await prisma.notification.findFirst({
+  const userNotification =
+    await prisma.userNotification.findFirst({
       where: {
-        id: notificationId,
+        notificationId,
         userId,
       },
     });
 
-  if (!notification) {
+  if (!userNotification) {
     throw new AppError(
       404,
       "Notification not found."
     );
   }
 
-  await prisma.notification.delete({
+  await prisma.userNotification.delete({
     where: {
-      id: notificationId,
+      id: userNotification.id,
     },
   });
 

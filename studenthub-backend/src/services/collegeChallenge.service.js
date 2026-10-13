@@ -370,6 +370,7 @@ export const createChallenge = async (
         return createdChallenge;
       }
     );
+    await createChallengeNotifications(challenge);
 
   return challenge;
 };
@@ -704,6 +705,47 @@ export const deleteChallenge = async (
   return prisma.challenge.delete({
     where: {
       id,
+    },
+  });
+};
+
+// creating notification for challenge
+
+const createChallengeNotifications = async (challenge) => {
+  const isAllDepartments =
+    challenge.departments.includes("ALL");
+
+  const students = await prisma.user.findMany({
+    where: {
+      role: "STUDENT",
+
+      ...(isAllDepartments
+        ? {}
+        : {
+            department: {
+              in: challenge.departments,
+            },
+          }),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (students.length === 0) return;
+
+  return prisma.notification.create({
+    data: {
+      type: "CHALLENGE_CREATED",
+      title: "New Challenge Available",
+      message: `${challenge.title} has been created.`,
+      challengeId: challenge.id,
+
+      recipients: {
+        create: students.map((student) => ({
+          userId: student.id,
+        })),
+      },
     },
   });
 };
