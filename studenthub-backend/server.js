@@ -3,6 +3,7 @@ import "dotenv/config"; // Must be the absolute first line!
 // ... rest of your imports
 import app from './src/app.js'
 import http from "http";
+// importing the config websocket 
 import { initializeSocket } from "./src/config/websockets.js";
 
 // your existing Express app
